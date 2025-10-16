@@ -55,7 +55,7 @@ def handle_callback(call):
 def run_bot():
     bot.polling(none_stop=True)
 
-schedule.every().day.at("11:40", tz=pytz.timezone('Asia/Vladivostok')).do(send_reminder)
+schedule.every().day.at("15:00", tz=pytz.timezone('Asia/Vladivostok')).do(send_reminder)
 schedule.every(1).minutes.do(check_reminder)
 
 if __name__ == '__main__':
@@ -63,4 +63,5 @@ if __name__ == '__main__':
     while True:
         schedule.run_pending()
         time.sleep(1)
+
 
