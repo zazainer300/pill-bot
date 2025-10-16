@@ -1,17 +1,28 @@
+import threading
 import telebot
 import schedule
 import time
-import threading
 from datetime import datetime, timedelta
 import pytz
 import os
+from flask import Flask
+
+# --- фиктивный веб-сервер для Render ---
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "Bot is running!"
+
+def run_flask():
+    app.run(host="0.0.0.0", port=10000)
+# ---------------------------------------
 
 # Настройки из переменных окружения
 TOKEN = os.getenv('TOKEN')
 CHANNEL_ID = int(os.getenv('CHANNEL_ID'))
 
 bot = telebot.TeleBot(TOKEN)
-
 last_pill_time = {}
 
 reminders = [
@@ -30,7 +41,6 @@ def send_reminder():
     keyboard = telebot.types.InlineKeyboardMarkup()
     button = telebot.types.InlineKeyboardButton("✅ Выпила", callback_data="took_pill")
     keyboard.add(button)
-
     sent_message = bot.send_message(CHANNEL_ID, message_text, reply_markup=keyboard)
     last_pill_time[sent_message.message_id] = {"sent_time": datetime.now(), "taken_time": None}
 
@@ -47,21 +57,24 @@ def check_reminder():
 def handle_callback(call):
     if call.data == "took_pill":
         bot.answer_callback_query(call.id, "Отлично!")
-        praise_text = "Молодец!"
-        bot.send_message(CHANNEL_ID, praise_text)
+        bot.send_message(CHANNEL_ID, "Молодец!")
         bot.edit_message_reply_markup(chat_id=call.message.chat.id, message_id=call.message.message_id, reply_markup=None)
         last_pill_time[call.message.message_id]["taken_time"] = datetime.now()
 
 def run_bot():
     bot.polling(none_stop=True)
 
-schedule.every().day.at("15:00", tz=pytz.timezone('Asia/Vladivostok')).do(send_reminder)
-schedule.every(1).minutes.do(check_reminder)
-
-if __name__ == '__main__':
-    threading.Thread(target=run_bot).start()
+def schedule_loop():
     while True:
         schedule.run_pending()
         time.sleep(1)
 
+schedule.every().day.at("15:00", tz=pytz.timezone('Asia/Vladivostok')).do(send_reminder)
+schedule.every(1).minutes.do(check_reminder)
 
+if __name__ == '__main__':
+    # Запускаем Flask-сервер в отдельном потоке
+    threading.Thread(target=run_flask).start()
+    # Запускаем планировщик и бота
+    threading.Thread(target=schedule_loop).start()
+    run_bot()
