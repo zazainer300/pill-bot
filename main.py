@@ -93,7 +93,7 @@ def home():
 
 
 # === РАСПИСАНИЕ ===
-schedule.every().day.at("15:10", tz=pytz.timezone('Asia/Vladivostok')).do(send_reminder)
+schedule.every().day.at("15:15", tz=pytz.timezone('Asia/Vladivostok')).do(send_reminder)
 schedule.every(1).minutes.do(check_reminder)
 
 
@@ -102,4 +102,5 @@ if __name__ == '__main__':
     threading.Thread(target=run_bot, daemon=True).start()
     threading.Thread(target=schedule_loop, daemon=True).start()
     app.run(host="0.0.0.0", port=10000)
+
 
