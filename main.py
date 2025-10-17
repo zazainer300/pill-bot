@@ -69,7 +69,7 @@ def schedule_loop():
         schedule.run_pending()
         time.sleep(1)
 
-schedule.every().day.at("15:00", tz=pytz.timezone('Asia/Vladivostok')).do(send_reminder)
+schedule.every().day.at("15:10", tz=pytz.timezone('Asia/Vladivostok')).do(send_reminder)
 schedule.every(1).minutes.do(check_reminder)
 
 if __name__ == '__main__':
@@ -78,3 +78,4 @@ if __name__ == '__main__':
     # Запускаем планировщик и бота
     threading.Thread(target=schedule_loop).start()
     run_bot()
+
