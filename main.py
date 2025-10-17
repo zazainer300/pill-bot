@@ -7,7 +7,7 @@ import pytz
 from flask import Flask
 
 # === НАСТРОЙКИ ===
-TOKEN = "ТОКЕН_ТВОЕГО_БОТА"
+TOKEN = "6000570380:AAGUjahW0W9iahEKW1o7d_bo4poeswofeAc"
 CHANNEL_ID = -1003095096004  # ID твоего канала
 
 bot = telebot.TeleBot(TOKEN)
@@ -102,3 +102,4 @@ if __name__ == '__main__':
     threading.Thread(target=run_bot, daemon=True).start()
     threading.Thread(target=schedule_loop, daemon=True).start()
     app.run(host="0.0.0.0", port=10000)
+
