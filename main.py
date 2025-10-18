@@ -1,67 +1,44 @@
+import os
+import json
+import time
+import logging
+import threading
+from datetime import datetime, timedelta
+from flask import Flask, request
+import pytz
 import telebot
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.events import EVENT_JOB_ERROR, EVENT_JOB_EXECUTED
-from datetime import datetime, timedelta
-import pytz
-from flask import Flask
-import threading
-import os
-import logging
-import time
-import json
 
-# Настройка логирования в консоль и файл
+# =================== НАСТРОЙКА ===================
+# Переменные окружения
+TOKEN = os.getenv("TELEGRAM_TOKEN")
+CHANNEL_ID = int(os.getenv("CHANNEL_ID", "-1003095096004"))
+PUBLIC_URL = os.getenv("PUBLIC_URL")  # например: https://your-app.onrender.com
+
+if not TOKEN:
+    raise SystemExit("❌ TELEGRAM_TOKEN не найден. Укажите его в переменных окружения Render.")
+
+# Telegram bot
+bot = telebot.TeleBot(TOKEN, threaded=True)
+app = Flask(__name__)
+
+# Часовой пояс Владивостока
+tz = pytz.timezone("Asia/Vladivostok")
+
+# =================== ЛОГИ ===================
 logging.basicConfig(
     level=logging.DEBUG,
-    format='%(asctime)s - %(levelname)s - %(message)s',
+    format="%(asctime)s - %(levelname)s - %(message)s",
     handlers=[
-        logging.StreamHandler(),  # Вывод в консоль
-        logging.FileHandler('bot.log')  # Вывод в файл
+        logging.StreamHandler(),
+        logging.FileHandler("bot.log", encoding="utf-8")
     ]
 )
 
-# Установка временной зоны
-os.environ["TZ"] = "Asia/Vladivostok"
-if hasattr(time, 'tzset'):
-    time.tzset()
-
-# === НАСТРОЙКИ ===
-TOKEN = "6000570380:AAGLK37oLf3b1W5P9kNYnsigEXSUVt7Ua0I"  # Верный токен
-CHANNEL_ID = -1003095096004  # ID канала
-
-bot = telebot.TeleBot(TOKEN)
-app = Flask(__name__)
-
-# === ДАННЫЕ ===
+# =================== ДАННЫЕ ===================
 last_pill_time = {}
-
-# Функции для сохранения и загрузки last_pill_time
-def save_last_pill_time():
-    try:
-        with open('last_pill_time.json', 'w') as f:
-            json.dump({k: {'sent_time': v['sent_time'].isoformat(), 'taken_time': v['taken_time'].isoformat() if v['taken_time'] else None} for k, v in last_pill_time.items()}, f)
-        logging.debug("last_pill_time сохранён в файл.")
-    except Exception as e:
-        logging.error(f"Ошибка при сохранении last_pill_time: {e}")
-
-def load_last_pill_time():
-    global last_pill_time
-    try:
-        with open('last_pill_time.json', 'r') as f:
-            data = json.load(f)
-            last_pill_time = {
-                int(k): {
-                    'sent_time': datetime.fromisoformat(v['sent_time']),
-                    'taken_time': datetime.fromisoformat(v['taken_time']) if v['taken_time'] else None
-                } for k, v in data.items()
-            }
-        logging.debug("last_pill_time загружен из файла.")
-    except FileNotFoundError:
-        logging.info("Файл last_pill_time.json не найден, инициализация пустого словаря.")
-        last_pill_time = {}
-    except Exception as e:
-        logging.error(f"Ошибка при загрузке last_pill_time: {e}")
-        last_pill_time = {}
+last_pill_lock = threading.Lock()
 
 reminders = [
     "Жопа, выпей таблетку.",
@@ -73,12 +50,43 @@ reminders = [
     "Софа, выпей таблеточку."
 ]
 
-# === ИНИЦИАЛИЗАЦИЯ APSCHEDULER ===
-scheduler = BackgroundScheduler(timezone=pytz.timezone('Asia/Vladivostok'))
+# =================== ФУНКЦИИ ===================
+def save_last_pill_time():
+    with last_pill_lock:
+        try:
+            data = {
+                k: {
+                    'sent_time': v['sent_time'].isoformat(),
+                    'taken_time': v['taken_time'].isoformat() if v['taken_time'] else None
+                } for k, v in last_pill_time.items()
+            }
+            with open('last_pill_time.json', 'w', encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+            logging.debug("✅ last_pill_time сохранён.")
+        except Exception as e:
+            logging.error(f"Ошибка при сохранении last_pill_time: {e}")
 
-# === ФУНКЦИИ ===
+def load_last_pill_time():
+    global last_pill_time
+    try:
+        with open('last_pill_time.json', 'r', encoding='utf-8') as f:
+            data = json.load(f)
+            last_pill_time = {
+                int(k): {
+                    'sent_time': datetime.fromisoformat(v['sent_time']),
+                    'taken_time': datetime.fromisoformat(v['taken_time']) if v['taken_time'] else None
+                } for k, v in data.items()
+            }
+        logging.info("✅ last_pill_time загружен.")
+    except FileNotFoundError:
+        logging.info("Файл last_pill_time.json не найден. Создан пустой словарь.")
+        last_pill_time = {}
+    except Exception as e:
+        logging.error(f"Ошибка при загрузке last_pill_time: {e}")
+        last_pill_time = {}
+
+# =================== ФУНКЦИИ БОТА ===================
 def send_reminder():
-    tz = pytz.timezone('Asia/Vladivostok')
     current_time = datetime.now(tz)
     day_of_week = current_time.weekday()
     message_text = reminders[day_of_week]
@@ -89,165 +97,104 @@ def send_reminder():
 
     try:
         sent_message = bot.send_message(CHANNEL_ID, message_text, reply_markup=keyboard)
-        last_pill_time[sent_message.message_id] = {"sent_time": current_time, "taken_time": None}
+        with last_pill_lock:
+            last_pill_time[sent_message.message_id] = {"sent_time": current_time, "taken_time": None}
         save_last_pill_time()
-        logging.info(f"[{current_time}] Отправлено напоминание для message_id={sent_message.message_id}")
+        logging.info(f"[{current_time}] Напоминание отправлено (message_id={sent_message.message_id})")
     except Exception as e:
-        logging.error(f"[{current_time}] Ошибка при отправке напоминания: {e}")
+        logging.error(f"Ошибка при отправке напоминания: {e}")
 
 def check_reminder():
-    tz = pytz.timezone('Asia/Vladivostok')
     current_time = datetime.now(tz)
-    logging.debug(f"[{current_time}] Выполняется check_reminder, last_pill_time: {last_pill_time}")
-    for message_id, times in list(last_pill_time.items()):
-        sent_time = times["sent_time"]
-        taken_time = times["taken_time"]
-        time_diff = current_time - sent_time
-        logging.debug(f"[{current_time}] Проверка message_id={message_id}, sent_time={sent_time}, taken_time={taken_time}, time_diff={time_diff}")
-        if taken_time is None and time_diff > timedelta(minutes=5):
-            try:
-                bot.send_message(CHANNEL_ID, "Наглая, ты не нажала кнопку! Выпей таблетку, а то по жопе получишь!")
-                last_pill_time[message_id]["taken_time"] = current_time
-                save_last_pill_time()
-                logging.info(f"[{current_time}] Отправлено повторное напоминание для message_id={message_id}")
-            except Exception as e:
-                logging.error(f"[{current_time}] Ошибка при отправке повторного напоминания: {e}")
-
-def log_bot_status():
-    tz = pytz.timezone('Asia/Vladivostok')
-    current_time = datetime.now(tz)
-    logging.info(f"[{current_time}] Бот запущен.")
-    
-    if last_pill_time:
+    logging.debug("Проверка напоминаний...")
+    with last_pill_lock:
         for message_id, times in list(last_pill_time.items()):
             sent_time = times["sent_time"]
             taken_time = times["taken_time"]
-            if taken_time is None:
-                logging.info(f"[{current_time}] Напоминание (message_id={message_id}) отправлено в {sent_time}, кнопка НЕ нажата.")
-            else:
-                next_reminder = sent_time.replace(hour=15, minute=0, second=0, microsecond=0)
-                if current_time > next_reminder:
-                    next_reminder += timedelta(days=1)
-                time_until_next = next_reminder - current_time
-                hours, remainder = divmod(time_until_next.total_seconds(), 3600)
-                minutes = remainder // 60
-                logging.info(f"[{current_time}] Напоминание (message_id={message_id}) отправлено в {sent_time}, кнопка нажата в {taken_time}. До следующего напоминания: {int(hours)} часов {int(minutes)} минут.")
-    else:
-        logging.info(f"[{current_time}] Напоминаний не отправлено.")
+            if taken_time is None and current_time - sent_time > timedelta(minutes=5):
+                try:
+                    bot.send_message(CHANNEL_ID, "Наглая, ты не нажала кнопку! Выпей таблетку 😠")
+                    last_pill_time[message_id]["taken_time"] = current_time
+                    save_last_pill_time()
+                    logging.info(f"Отправлено повторное напоминание для message_id={message_id}")
+                except Exception as e:
+                    logging.error(f"Ошибка при повторном напоминании: {e}")
+
+def log_bot_status():
+    current_time = datetime.now(tz)
+    logging.info(f"Статус: {len(last_pill_time)} напоминаний сохранено.")
+    with last_pill_lock:
+        for message_id, times in last_pill_time.items():
+            logging.info(f"→ {message_id}: отправлено в {times['sent_time']}, нажата: {bool(times['taken_time'])}")
 
 @bot.callback_query_handler(func=lambda call: True)
 def handle_callback(call):
-    tz = pytz.timezone('Asia/Vladivostok')
     current_time = datetime.now(tz)
     if call.data == "took_pill":
         try:
             bot.answer_callback_query(call.id, "Отлично!")
             bot.send_message(CHANNEL_ID, "Молодец ❤️")
             bot.edit_message_reply_markup(call.message.chat.id, call.message.message_id, reply_markup=None)
-            if call.message.message_id in last_pill_time:
-                last_pill_time[call.message.message_id]["taken_time"] = current_time
-                save_last_pill_time()
-                logging.info(f"[{current_time}] Кнопка нажата для message_id={call.message.message_id}")
-            else:
-                logging.warning(f"[{current_time}] message_id={call.message.message_id} не найден в last_pill_time")
+            with last_pill_lock:
+                if call.message.message_id in last_pill_time:
+                    last_pill_time[call.message.message_id]["taken_time"] = current_time
+                    save_last_pill_time()
+            logging.info(f"[{current_time}] Кнопка нажата (message_id={call.message.message_id})")
         except Exception as e:
-            logging.error(f"[{current_time}] Ошибка при обработке кнопки: {e}")
+            logging.error(f"Ошибка при обработке кнопки: {e}")
 
-# === ФОНОВЫЕ ПОТОКИ ===
-def run_bot():
-    import telebot.apihelper
-    tz = pytz.timezone('Asia/Vladivostok')
-    while True:
-        try:
-            bot.polling(none_stop=True, interval=1)
-            logging.info(f"[{datetime.now(tz)}] Polling успешно запущен.")
-        except telebot.apihelper.ApiTelegramException as e:
-            if "Conflict" in str(e):
-                logging.warning(f"[{datetime.now(tz)}] Обнаружен дубликат бота — завершаем этот экземпляр.")
-                time.sleep(10)
-            else:
-                logging.error(f"[{datetime.now(tz)}] Ошибка polling: {e}")
-                time.sleep(10)
-        except Exception as e:
-            logging.error(f"[{datetime.now(tz)}] Ошибка: {e}")
-            time.sleep(10)
+# =================== APSCHEDULER ===================
+scheduler = BackgroundScheduler(timezone=tz)
 
-# === ПОДДЕРЖКА ХОСТИНГА ===
+def setup_scheduler():
+    scheduler.remove_all_jobs()
+    scheduler.add_job(send_reminder, 'cron', hour=15, minute=0, id='send_reminder')
+    scheduler.add_job(check_reminder, 'interval', minutes=10, id='check_reminder')
+    scheduler.add_job(log_bot_status, 'interval', minutes=2, id='log_status')
+    logging.info("✅ Расписание задач настроено.")
+    for job in scheduler.get_jobs():
+        logging.info(f"→ {job}")
+
+def job_listener(event):
+    if event.exception:
+        logging.error(f"Ошибка в задаче {event.job_id}: {event.exception}")
+    else:
+        logging.debug(f"Задача {event.job_id} выполнена успешно.")
+
+scheduler.add_listener(job_listener, EVENT_JOB_EXECUTED | EVENT_JOB_ERROR)
+
+# =================== FLASK ROUTES ===================
 @app.route('/')
 def home():
-    tz = pytz.timezone('Asia/Vladivostok')
-    logging.info(f"[{datetime.now(tz)}] Получен запрос на /")
-    return "✅ Бот работает", 200
+    return "✅ Бот работает (Render Flask Webhook).", 200
 
-# === СЛУШАТЕЛЬ СОБЫТИЙ APSCHEDULER ===
-def job_listener(event):
-    tz = pytz.timezone('Asia/Vladivostok')
-    if event.exception:
-        logging.error(f"[{datetime.now(tz)}] Ошибка в задаче {event.job_id}: {event.exception}")
-    else:
-        logging.debug(f"[{datetime.now(tz)}] Задача {event.job_id} выполнена успешно.")
+@app.route(f"/webhook/{TOKEN}", methods=['POST'])
+def webhook():
+    json_str = request.get_data().decode('utf-8')
+    update = telebot.types.Update.de_json(json_str)
+    bot.process_new_updates([update])
+    return '', 200
 
-# === НАСТРОЙКА РАСПИСАНИЯ ===
-def setup_scheduler():
-    tz = pytz.timezone('Asia/Vladivostok')
-    logging.info(f"[{datetime.now(tz)}] Инициализация расписания...")
-    scheduler.remove_all_jobs()
-    # Напоминание один раз в день в 15:00
-    scheduler.add_job(
-        send_reminder,
-        'cron',
-        hour=15,
-        minute=0,
-        timezone=pytz.timezone('Asia/Vladivostok'),
-        id='send_reminder'
-    )
-    # Проверка каждые 10 минут
-    scheduler.add_job(
-        check_reminder,
-        'interval',
-        minutes=10,
-        timezone=pytz.timezone('Asia/Vladivostok'),
-        id='check_reminder'
-    )
-    # Логирование статуса каждые 2 минуты
-    scheduler.add_job(
-        log_bot_status,
-        'interval',
-        minutes=2,
-        timezone=pytz.timezone('Asia/Vladivostok'),
-        id='log_bot_status'
-    )
-    # Логируем зарегистрированные задачи
-    logging.info(f"[{datetime.now(tz)}] Зарегистрированные задачи: {scheduler.get_jobs()}")
+def set_webhook():
+    if not PUBLIC_URL:
+        logging.error("❌ PUBLIC_URL не задан в окружении! Webhook не будет установлен.")
+        return
+    webhook_url = f"{PUBLIC_URL}/webhook/{TOKEN}"
+    bot.remove_webhook()
+    success = bot.set_webhook(url=webhook_url)
+    logging.info(f"🔗 Установка webhook: {webhook_url} — {'успешно' if success else 'ошибка'}")
 
-# === ЗАПУСК ===
+# =================== MAIN ===================
 if __name__ == "__main__":
-    tz = pytz.timezone('Asia/Vladivostok')
-    logging.info(f"[{datetime.now(tz)}] Запуск приложения...")
-    # Загружаем last_pill_time
+    logging.info("🚀 Запуск бота на Render...")
     load_last_pill_time()
-    # Настраиваем расписание
     setup_scheduler()
-    # Запускаем планировщик
-    try:
-        scheduler.start()
-        logging.info(f"[{datetime.now(tz)}] Планировщик запущен.")
-        # Логируем следующий запуск только после старта
-        logging.info(f"[{datetime.now(tz)}] Следующий запуск send_reminder: {scheduler.get_jobs()[0].next_run_time if scheduler.get_jobs() else 'Не запланировано'}")
-    except Exception as e:
-        logging.error(f"[{datetime.now(tz)}] Ошибка при запуске планировщика: {e}")
-        raise
-    # Проверяем Telegram API
+    scheduler.start()
+    set_webhook()
     try:
         bot.get_me()
-        logging.info(f"[{datetime.now(tz)}] Telegram API работает, бот инициализирован.")
-        bot.send_message(CHANNEL_ID, "Тест: Бот запущен на Render.com")
+        bot.send_message(CHANNEL_ID, "✅ Бот запущен на Render!")
+        logging.info("Бот успешно инициализирован через Telegram API.")
     except Exception as e:
-        logging.error(f"[{datetime.now(tz)}] Ошибка Telegram API: {e}")
-    # Запускаем Flask в фоновом потоке
-    def run_flask():
-        app.run(host="0.0.0.0", port=int(os.getenv("PORT", 10000)))
-    flask_thread = threading.Thread(target=run_flask, daemon=True)
-    flask_thread.start()
-    # Запускаем бота
-    run_bot()
+        logging.error(f"Ошибка при проверке Telegram API: {e}")
+    app.run(host="0.0.0.0", port=int(os.getenv("PORT", 10000)))
