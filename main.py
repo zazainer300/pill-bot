@@ -19,7 +19,7 @@ if hasattr(time, 'tzset'):
     time.tzset()
 
 # === НАСТРОЙКИ ===
-TOKEN = "6000570380:AAGLK37oLf3b1W5P9kNYnsigEXSUVt7Ua0I"  # Оригинальный токен
+TOKEN = "6000570380:AAGLK37oLf3b1W5P9kNYnsigEXSUVt7Ua0I"  # Верный токен
 CHANNEL_ID = -1003095096004  # ID канала
 
 bot = telebot.TeleBot(TOKEN)
@@ -28,14 +28,18 @@ app = Flask(__name__)
 # === ДАННЫЕ ===
 last_pill_time = {}
 
+
 # Функции для сохранения и загрузки last_pill_time
 def save_last_pill_time():
     try:
         with open('last_pill_time.json', 'w') as f:
-            json.dump({k: {'sent_time': v['sent_time'].isoformat(), 'taken_time': v['taken_time'].isoformat() if v['taken_time'] else None} for k, v in last_pill_time.items()}, f)
+            json.dump({k: {'sent_time': v['sent_time'].isoformat(),
+                           'taken_time': v['taken_time'].isoformat() if v['taken_time'] else None} for k, v in
+                       last_pill_time.items()}, f)
         logging.debug("last_pill_time сохранён в файл.")
     except Exception as e:
         logging.error(f"Ошибка при сохранении last_pill_time: {e}")
+
 
 def load_last_pill_time():
     global last_pill_time
@@ -56,6 +60,7 @@ def load_last_pill_time():
         logging.error(f"Ошибка при загрузке last_pill_time: {e}")
         last_pill_time = {}
 
+
 reminders = [
     "Жопа, выпей таблетку.",
     "Жопа, время таблеток.",
@@ -68,6 +73,7 @@ reminders = [
 
 # === ИНИЦИАЛИЗАЦИЯ APSCHEDULER ===
 scheduler = BackgroundScheduler(timezone=pytz.timezone('Asia/Vladivostok'))
+
 
 # === ФУНКЦИИ ===
 def send_reminder():
@@ -88,6 +94,7 @@ def send_reminder():
     except Exception as e:
         logging.error(f"[{current_time}] Ошибка при отправке напоминания: {e}")
 
+
 def check_reminder():
     tz = pytz.timezone('Asia/Vladivostok')
     current_time = datetime.now(tz)
@@ -96,7 +103,8 @@ def check_reminder():
         sent_time = times["sent_time"]
         taken_time = times["taken_time"]
         time_diff = current_time - sent_time
-        logging.debug(f"[{current_time}] Проверка message_id={message_id}, sent_time={sent_time}, taken_time={taken_time}, time_diff={time_diff}")
+        logging.debug(
+            f"[{current_time}] Проверка message_id={message_id}, sent_time={sent_time}, taken_time={taken_time}, time_diff={time_diff}")
         if taken_time is None and time_diff > timedelta(minutes=5):
             try:
                 bot.send_message(CHANNEL_ID, "Наглая, ты не нажала кнопку! Выпей таблетку, а то по жопе получишь!")
@@ -106,17 +114,19 @@ def check_reminder():
             except Exception as e:
                 logging.error(f"[{current_time}] Ошибка при отправке повторного напоминания: {e}")
 
+
 def log_bot_status():
     tz = pytz.timezone('Asia/Vladivostok')
     current_time = datetime.now(tz)
     logging.info(f"[{current_time}] Бот запущен.")
-    
+
     if last_pill_time:
         for message_id, times in list(last_pill_time.items()):
             sent_time = times["sent_time"]
             taken_time = times["taken_time"]
             if taken_time is None:
-                logging.info(f"[{current_time}] Напоминание (message_id={message_id}) отправлено в {sent_time}, кнопка НЕ нажата.")
+                logging.info(
+                    f"[{current_time}] Напоминание (message_id={message_id}) отправлено в {sent_time}, кнопка НЕ нажата.")
             else:
                 next_reminder = sent_time.replace(hour=15, minute=0, second=0, microsecond=0)
                 if current_time > next_reminder:
@@ -124,9 +134,11 @@ def log_bot_status():
                 time_until_next = next_reminder - current_time
                 hours, remainder = divmod(time_until_next.total_seconds(), 3600)
                 minutes = remainder // 60
-                logging.info(f"[{current_time}] Напоминание (message_id={message_id}) отправлено в {sent_time}, кнопка нажата в {taken_time}. До следующего напоминания: {int(hours)} часов {int(minutes)} минут.")
+                logging.info(
+                    f"[{current_time}] Напоминание (message_id={message_id}) отправлено в {sent_time}, кнопка нажата в {taken_time}. До следующего напоминания: {int(hours)} часов {int(minutes)} минут.")
     else:
         logging.info(f"[{current_time}] Напоминаний не отправлено.")
+
 
 @bot.callback_query_handler(func=lambda call: True)
 def handle_callback(call):
@@ -146,6 +158,7 @@ def handle_callback(call):
         except Exception as e:
             logging.error(f"[{current_time}] Ошибка при обработке кнопки: {e}")
 
+
 # === ФОНОВЫЕ ПОТОКИ ===
 def run_bot():
     import telebot.apihelper
@@ -164,10 +177,12 @@ def run_bot():
             logging.error(f"[{datetime.now(tz)}] Ошибка: {e}")
             time.sleep(10)
 
-# === ПОДДЕРЖКА РЕНДЕРА (порт-заглушка) ===
+
+# === ПОДДЕРЖКА ХОСТИНГА (маршрут для проверки) ===
 @app.route('/')
 def home():
     return "✅ Бот работает", 200
+
 
 # === СЛУШАТЕЛЬ СОБЫТИЙ APSCHEDULER ===
 def job_listener(event):
@@ -176,6 +191,7 @@ def job_listener(event):
         logging.error(f"[{datetime.now(tz)}] Ошибка в задаче {event.job_id}: {event.exception}")
     else:
         logging.debug(f"[{datetime.now(tz)}] Задача {event.job_id} выполнена успешно.")
+
 
 # === НАСТРОЙКА РАСПИСАНИЯ ===
 def setup_scheduler():
@@ -207,21 +223,31 @@ def setup_scheduler():
         timezone=pytz.timezone('Asia/Vladivostok'),
         id='log_bot_status'
     )
+    # Логируем зарегистрированные задачи
+    logging.info(f"[{datetime.now(tz)}] Зарегистрированные задачи: {scheduler.get_jobs()}")
+
 
 # === ЗАПУСК ===
 if __name__ == "__main__":
     tz = pytz.timezone('Asia/Vladivostok')
+    logging.info(f"[{datetime.now(tz)}] Запуск приложения...")
     # Загружаем last_pill_time
     load_last_pill_time()
     # Настраиваем слушатель APScheduler
     scheduler.add_listener(job_listener, EVENT_JOB_ERROR | EVENT_JOB_EXECUTED)
     # Запускаем планировщик
-    setup_scheduler()
     try:
         scheduler.start()
         logging.info(f"[{datetime.now(tz)}] Планировщик запущен.")
     except Exception as e:
         logging.error(f"[{datetime.now(tz)}] Ошибка при запуске планировщика: {e}")
+        raise
+    # Проверяем Telegram API
+    try:
+        bot.get_me()
+        logging.info(f"[{datetime.now(tz)}] Telegram API работает, бот инициализирован.")
+    except Exception as e:
+        logging.error(f"[{datetime.now(tz)}] Ошибка Telegram API: {e}")
     # Запускаем бота и Flask
     threading.Thread(target=run_bot, daemon=True).start()
-    app.run(host="0.0.0.0", port=10000)
+    app.run(host="0.0.0.0", port=int(os.getenv("PORT", 10000)))
