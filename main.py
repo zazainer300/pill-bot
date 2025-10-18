@@ -7,6 +7,7 @@ from flask import Flask
 import threading
 import os
 import logging
+import time  # Добавляем импорт модуля time
 
 # Настройка логирования для диагностики
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -36,7 +37,7 @@ reminders = [
 ]
 
 # === ИНИЦИАЛИЗАЦИЯ APSCHEDULER ===
-# Настройка хранилища задач в SQLite (для устойчивости к перезапускам)
+# Настройка хранилища задач в SQLite
 job_stores = {
     'default': SQLAlchemyJobStore(url='sqlite:///jobs.sqlite')
 }
@@ -113,14 +114,14 @@ def home():
 # === НАСТРОЙКА РАСПИСАНИЯ ===
 def setup_scheduler():
     logging.info(f"[{datetime.now(pytz.timezone('Asia/Vladivostok'))}] Инициализация расписания...")
-    # Удаляем старые задачи (на случай перезапуска)
+    # Удаляем старые задачи
     scheduler.remove_all_jobs()
     # Ежедневное напоминание в 15:40
     scheduler.add_job(
         send_reminder,
         'cron',
         hour=15,
-        minute=00,
+        minute=40,
         timezone=pytz.timezone('Asia/Vladivostok'),
         id='send_reminder'
     )
@@ -143,4 +144,3 @@ if __name__ == "__main__":
     # Запускаем бота и Flask в отдельных потоках
     threading.Thread(target=run_bot, daemon=True).start()
     app.run(host="0.0.0.0", port=10000)
-
