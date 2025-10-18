@@ -1,6 +1,7 @@
 import telebot
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
+from apscheduler.events import EVENT_JOB_ERROR, EVENT_JOB_EXECUTED
 from datetime import datetime, timedelta
 import pytz
 from flask import Flask
@@ -103,7 +104,7 @@ def check_reminder():
         taken_time = times["taken_time"]
         time_diff = current_time - sent_time
         logging.debug(f"[{current_time}] Проверка message_id={message_id}, sent_time={sent_time}, taken_time={taken_time}, time_diff={time_diff}")
-        if taken_time is None and time_diff > timedelta(minutes=10):
+        if taken_time is None and time_diff > timedelta(minutes=5):
             try:
                 bot.send_message(CHANNEL_ID, "Наглая, ты не нажала кнопку! Выпей таблетку, а то по жопе получишь!")
                 last_pill_time[message_id]["taken_time"] = current_time
@@ -153,23 +154,33 @@ def run_bot():
 def home():
     return "✅ Бот работает", 200
 
+# === СЛУШАТЕЛЬ СОБЫТИЙ APSCHEDULER ===
+def job_listener(event):
+    tz = pytz.timezone('Asia/Vladivostok')
+    if event.exception:
+        logging.error(f"[{datetime.now(tz)}] Ошибка в задаче {event.job_id}: {event.exception}")
+    else:
+        logging.debug(f"[{datetime.now(tz)}] Задача {event.job_id} выполнена успешно.")
+
 # === НАСТРОЙКА РАСПИСАНИЯ ===
 def setup_scheduler():
     tz = pytz.timezone('Asia/Vladivostok')
     logging.info(f"[{datetime.now(tz)}] Инициализация расписания...")
     scheduler.remove_all_jobs()
+    # Напоминание один раз в день в 15:00
     scheduler.add_job(
         send_reminder,
         'cron',
-        hour=16,
-        minute=05,
+        hour=15,
+        minute=0,
         timezone=pytz.timezone('Asia/Vladivostok'),
         id='send_reminder'
     )
+    # Проверка каждые 10 минут
     scheduler.add_job(
         check_reminder,
         'interval',
-        minutes=1,
+        minutes=10,
         timezone=pytz.timezone('Asia/Vladivostok'),
         id='check_reminder'
     )
@@ -179,6 +190,8 @@ if __name__ == "__main__":
     tz = pytz.timezone('Asia/Vladivostok')
     # Загружаем last_pill_time
     load_last_pill_time()
+    # Настраиваем слушатель APScheduler
+    scheduler.add_listener(job_listener, EVENT_JOB_ERROR | EVENT_JOB_EXECUTED)
     # Запускаем планировщик
     setup_scheduler()
     try:
@@ -189,4 +202,3 @@ if __name__ == "__main__":
     # Запускаем бота и Flask
     threading.Thread(target=run_bot, daemon=True).start()
     app.run(host="0.0.0.0", port=10000)
-
