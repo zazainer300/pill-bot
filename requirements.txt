@@ -2,4 +2,5 @@ pytelegrambotapi
 Flask 
 apscheduler 
 pytz 
-SQLAlchemy
+SQLAlchemy 
+gunicorn
