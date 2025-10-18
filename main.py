@@ -161,8 +161,8 @@ def setup_scheduler():
     scheduler.add_job(
         send_reminder,
         'cron',
-        hour=15,
-        minute=00,
+        hour=16,
+        minute=05,
         timezone=pytz.timezone('Asia/Vladivostok'),
         id='send_reminder'
     )
@@ -189,3 +189,4 @@ if __name__ == "__main__":
     # Запускаем бота и Flask
     threading.Thread(target=run_bot, daemon=True).start()
     app.run(host="0.0.0.0", port=10000)
+
