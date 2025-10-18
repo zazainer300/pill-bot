@@ -219,7 +219,6 @@ def setup_scheduler():
     )
     # Логируем зарегистрированные задачи
     logging.info(f"[{datetime.now(tz)}] Зарегистрированные задачи: {scheduler.get_jobs()}")
-    logging.info(f"[{datetime.now(tz)}] Следующий запуск send_reminder: {scheduler.get_job('send_reminder').next_run_time}")
 
 # === ЗАПУСК ===
 if __name__ == "__main__":
@@ -233,6 +232,8 @@ if __name__ == "__main__":
     try:
         scheduler.start()
         logging.info(f"[{datetime.now(tz)}] Планировщик запущен.")
+        # Логируем следующий запуск только после старта
+        logging.info(f"[{datetime.now(tz)}] Следующий запуск send_reminder: {scheduler.get_jobs()[0].next_run_time if scheduler.get_jobs() else 'Не запланировано'}")
     except Exception as e:
         logging.error(f"[{datetime.now(tz)}] Ошибка при запуске планировщика: {e}")
         raise
