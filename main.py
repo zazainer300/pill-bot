@@ -113,6 +113,29 @@ def check_reminder():
             except Exception as e:
                 logging.error(f"[{current_time}] Ошибка при отправке повторного напоминания: {e}")
 
+def log_bot_status():
+    tz = pytz.timezone('Asia/Vladivostok')
+    current_time = datetime.now(tz)
+    logging.info(f"[{current_time}] Бот запущен.")
+    
+    if last_pill_time:
+        for message_id, times in list(last_pill_time.items()):
+            sent_time = times["sent_time"]
+            taken_time = times["taken_time"]
+            if taken_time is None:
+                logging.info(f"[{current_time}] Напоминание (message_id={message_id}) отправлено в {sent_time}, кнопка НЕ нажата.")
+            else:
+                # Рассчитываем время до следующего напоминания (15:00 следующего дня)
+                next_reminder = sent_time.replace(hour=15, minute=0, second=0, microsecond=0)
+                if current_time > next_reminder:
+                    next_reminder += timedelta(days=1)
+                time_until_next = next_reminder - current_time
+                hours, remainder = divmod(time_until_next.total_seconds(), 3600)
+                minutes = remainder // 60
+                logging.info(f"[{current_time}] Напоминание (message_id={message_id}) отправлено в {sent_time}, кнопка нажата в {taken_time}. До следующего напоминания: {int(hours)} часов {int(minutes)} минут.")
+    else:
+        logging.info(f"[{current_time}] Напоминаний не отправлено.")
+
 @bot.callback_query_handler(func=lambda call: True)
 def handle_callback(call):
     tz = pytz.timezone('Asia/Vladivostok')
@@ -183,6 +206,14 @@ def setup_scheduler():
         minutes=10,
         timezone=pytz.timezone('Asia/Vladivostok'),
         id='check_reminder'
+    )
+    # Логирование статуса каждые 2 минуты
+    scheduler.add_job(
+        log_bot_status,
+        'interval',
+        minutes=2,
+        timezone=pytz.timezone('Asia/Vladivostok'),
+        id='log_bot_status'
     )
 
 # === ЗАПУСК ===
