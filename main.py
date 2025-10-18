@@ -10,7 +10,7 @@ import telebot
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.events import EVENT_JOB_ERROR, EVENT_JOB_EXECUTED
 
-# === ЛОГИРОВАНИЕ ===
+# === ЛОГИ ===
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
@@ -170,11 +170,10 @@ if __name__ == "__main__":
     load_last_pill_time()
     setup_scheduler()
 
+    # Устанавливаем webhook
     try:
         bot.remove_webhook()
         bot.set_webhook(url=f"{PUBLIC_URL}/webhook/{TOKEN}")
         logging.info(f"🔗 Webhook установлен: {PUBLIC_URL}/webhook/{TOKEN}")
     except Exception as e:
         logging.error(f"Ошибка при установке webhook: {e}")
-
-    app.run(host="0.0.0.0", port=int(os.getenv("PORT", 10000)))
