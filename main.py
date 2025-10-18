@@ -227,8 +227,8 @@ if __name__ == "__main__":
     logging.info(f"[{datetime.now(tz)}] Запуск приложения...")
     # Загружаем last_pill_time
     load_last_pill_time()
-    # Настраиваем слушатель APScheduler
-    scheduler.add_listener(job_listener, EVENT_JOB_ERROR | EVENT_JOB_EXECUTED)
+    # Настраиваем расписание
+    setup_scheduler()
     # Запускаем планировщик
     try:
         scheduler.start()
@@ -243,6 +243,10 @@ if __name__ == "__main__":
         bot.send_message(CHANNEL_ID, "Тест: Бот запущен на Render.com")
     except Exception as e:
         logging.error(f"[{datetime.now(tz)}] Ошибка Telegram API: {e}")
-    # Запускаем бота и Flask
-    threading.Thread(target=run_bot, daemon=True).start()
-    app.run(host="0.0.0.0", port=int(os.getenv("PORT", 10000)))
+    # Запускаем Flask в фоновом потоке
+    def run_flask():
+        app.run(host="0.0.0.0", port=int(os.getenv("PORT", 10000)))
+    flask_thread = threading.Thread(target=run_flask, daemon=True)
+    flask_thread.start()
+    # Запускаем бота
+    run_bot()
