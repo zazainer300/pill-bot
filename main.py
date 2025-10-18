@@ -17,7 +17,7 @@ if hasattr(time, 'tzset'):
     time.tzset()
 
 # === НАСТРОЙКИ ===
-TOKEN = "6000570380:AAGUjahW0W9iahEKW1o7d_bo4poeswofeAc"
+TOKEN = "6000570380:AAGLK37oLf3b1W5P9kNYnsigEXSUVt7Ua0I"
 CHANNEL_ID = -1003095096004  # ID канала
 
 bot = telebot.TeleBot(TOKEN)
@@ -143,3 +143,4 @@ if __name__ == "__main__":
     # Запускаем бота и Flask в отдельных потоках
     threading.Thread(target=run_bot, daemon=True).start()
     app.run(host="0.0.0.0", port=10000)
+
