@@ -1,6 +1,4 @@
-pytelegrambotapi 
-Flask 
-apscheduler 
-pytz 
-SQLAlchemy 
-gunicorn
+Flask
+pyTelegramBotAPI
+apscheduler
+pytz
