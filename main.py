@@ -1,6 +1,5 @@
 import telebot
 from apscheduler.schedulers.background import BackgroundScheduler
-from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 from apscheduler.events import EVENT_JOB_ERROR, EVENT_JOB_EXECUTED
 from datetime import datetime, timedelta
 import pytz
@@ -20,7 +19,7 @@ if hasattr(time, 'tzset'):
     time.tzset()
 
 # === НАСТРОЙКИ ===
-TOKEN = "6000570380:AAGLK37oLf3b1W5P9kNYnsigEXSUVt7Ua0I"
+TOKEN = "6000570380:AAGLK37oLf3b1W5P9kNYnsigEXSUVt7Ua0I"  # Оригинальный токен
 CHANNEL_ID = -1003095096004  # ID канала
 
 bot = telebot.TeleBot(TOKEN)
@@ -68,13 +67,7 @@ reminders = [
 ]
 
 # === ИНИЦИАЛИЗАЦИЯ APSCHEDULER ===
-job_stores = {
-    'default': SQLAlchemyJobStore(url='sqlite:///jobs.sqlite')
-}
-scheduler = BackgroundScheduler(
-    jobstores=job_stores,
-    timezone=pytz.timezone('Asia/Vladivostok')
-)
+scheduler = BackgroundScheduler(timezone=pytz.timezone('Asia/Vladivostok'))
 
 # === ФУНКЦИИ ===
 def send_reminder():
@@ -125,7 +118,6 @@ def log_bot_status():
             if taken_time is None:
                 logging.info(f"[{current_time}] Напоминание (message_id={message_id}) отправлено в {sent_time}, кнопка НЕ нажата.")
             else:
-                # Рассчитываем время до следующего напоминания (15:00 следующего дня)
                 next_reminder = sent_time.replace(hour=15, minute=0, second=0, microsecond=0)
                 if current_time > next_reminder:
                     next_reminder += timedelta(days=1)
